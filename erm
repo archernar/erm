@@ -1,0 +1,150 @@
+#!/bin/bash
+Tmp="/tmp/$$"
+trap 'rm -f "$Tmp" >/dev/null 2>&1' 0
+trap "exit 2" 1 2 3 13 15
+rm -f "$Tmp" >/dev/null 2>&1
+BGOURL=https://tunein.com/radio/WBGO-883-s27437/
+TUNEINURL="https://tunein.com/radio"
+
+# ######################################
+# geometry WIDTHxHEIGHT+XOFF+YOFF 
+# TOP SCREEN UPPER LEFT   4x4+100+0
+# BOT SCREEN UPPER LEFT   4x4+100+1125
+# The right side is about 1500 or so
+# ######################################
+cat <<-ENDOF1 | egrep -v ^[#] > "$Tmp"
+110x30+300+1325  TERM TERM
+132x18+50+100    SETB ssh $USER@master                                         
+180x11+50+480    LOG  rsh $USER@master tail -f /var/log/apache2/error.log;      
+180x11+50+810    LOG  rsh $USER@master tail -f /var/log/toc;                     
+180x11+50+110    LOG  rsh $USER@master tail -f /var/log/fleet;                  
+84x18+1200+100   SETA TERM                                                 
+# WIDTHxHEIGHT+XOFF+YOFF 
+100x40+25+13     MASTER ssh $USER@master                                    
+150x40+200+1250  MASTER ssh $USER@master                                    
+110x10+90+1125   SETB TERM                                                   
+88x32+1175+25    SETB bashtop                                                 
+200x200+1700+25  BACK X dclock                                                 
+180x11+50+810    FLEET rsh $USER@master tail -f /var/log/fleet;                  
+150x40+200+1250  FLEET ssh $USER@master                                           
+50x8+1200+25     FLEET TERM
+75x8+1200+25     LOCAL TERM
+75x8+1200+225    LOCAL ssh $USER@master         
+75x8+1200+425    LOCAL ssh google-chrome https://tunein.com/radio/WBGO-883-s27437/
+150x40+200+1250  LOCAL ssh $USER@master                                          
+75x8+1200+425    CHROME google-chrome  https://tunein.com/radio/
+# WIDTHxHEIGHT+XOFF+YOFF 
+180x16+50+480    WORK rsh $USER@master tail -f /var/log/apache2/error.log;      
+180x11+50+810    WORK rsh $USER@master tail -f /var/log/toc;                     
+150x40+200+1250  WORK ssh $USER@master                                          
+#150x8+1700+25   WORK TERM
+75x8+1200+25     WORK TERM
+75x8+1200+225    WORK ssh $USER@master         
+150x40+200+1250  WTF ssh $USER@master                                          
+150x40+190+1240  DEFAULT TERM
+150x40+200+1250  DEFAULT ssh $USER@master                                    
+150x40+200+1250  DEFAULT ssh $USER@master                                    
+ENDOF1
+
+cat "$Tmp" | sed 's/[/][/].*$//' > ~/.erm.conf
+
+function label-gnome-terminal {
+    echo -ne "\033]0;$1\007"
+}   
+
+if [ $# -eq 0 ]; then
+    echo "Listing"
+    cat $Tmp
+    echo ""
+    exit 0
+fi
+DEBUG=""
+SUBSET=""
+
+# if [[ "$V" = "RESET" ]]; then
+# else
+# fi
+
+while getopts "Dds:" arg
+do
+        case $arg in
+            s) SUBSET=$OPTARG
+               cat "$Tmp" | gawk -v s=$SUBSET '{if (tolower($2)==tolower(s)) print $0}' > ~/.erm.conf
+               ;;
+            D) DEBUG="YES"
+               ;;
+            d) SUBSET="DEFAULT"
+               cat "$Tmp" | gawk -v s=$SUBSET '{if (tolower($2)==tolower(s)) print $0}' > ~/.erm.conf
+               ;;
+            *) exit 0
+               ;;
+        esac
+done
+shift $(($OPTIND - 1))
+
+
+gawk -v debug="$DEBUG" '
+function ltrim(s) { sub(/^ */, "", s); return s }
+function rtrim(s) { sub(/ *$/, "", s); return s }
+function trim(s) { return rtrim(ltrim(s)); }
+
+BEGIN {
+sp=" "
+sq="\x27"
+dq="\x22"
+
+
+
+
+# LABB="label-gnome-terminal \"MOXE\""
+
+prefix="nohup gnome-terminal --geometry="
+midfix="-- /bin/sh -c"
+postfix=" >/dev/null 2>&1 &"
+}
+/^$/ {
+    next
+}
+{
+    geo=$1
+    key=$2
+    cword=trim($3)
+
+    switch (cword) {
+       case "TERM":
+           sz = prefix geo sp postfix
+           break
+       case "X":
+           $1=""; $2=""; $3="";
+           sz = "nohup" sp  trim($0) sp "-geometry " geo sp postfix
+           break
+       case "google-chrome":
+           # $1=""; $2=""; $3=""; $4=""; $5=""; $6="";
+           $1=""; $2=""; $3="";
+           sz = "nohup google-chrome --geometry=" geo sp trim($0) postfix
+           break
+       case "ssh":
+           $1=""; $2=""; $3="";
+           titlestring="\033]0;" cword sp trim($0) sp "\007"
+           titlecmd="echo -ne " dq titlestring dq ";"
+           sz = prefix geo sp midfix sp sq titlecmd cword sp trim($0) sq sp postfix
+           break
+       case "rsh":
+           $1=""; $2=""; $3="";
+           sz = prefix geo sp midfix sp sq cword sp trim($0) sq sp  postfix
+           break
+       default:
+           break
+    }
+
+    if ( debug == "YES" ) {
+        print sz
+    } else {
+        system(sz)
+    }
+
+}
+' ~/.erm.conf
+
+
+
