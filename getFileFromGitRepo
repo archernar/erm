@@ -1,0 +1,39 @@
+#!/bin/bash
+SCR=$(echo "$0" | gawk '{n=split($0, a, "/"); print a[n];}')
+TmpDirHome="GH$$"
+TmpDir="/tmp/$TmpDirHome/$$"
+rm -rf "/tmp/$TmpDirHome"  >/dev/null 2>&1
+mkdir -p "$TmpDir"
+
+REPO=""
+FILE=""
+ANON=`date`
+HERE=`pwd`
+
+while getopts "r:f:" arg
+do
+	case $arg in
+            r) REPO=$OPTARG
+               ;;
+            f) FILE=$OPTARG
+               ;;
+	esac
+done
+shift $(($OPTIND - 1))
+
+if [ -z "$REPO" ]; then 
+    echo "Error:  Use -r <REPO> to designate a Repo"
+    exit 1
+fi
+if [ -z "$FILE" ]; then 
+    echo "Error:  Use -f <FILE> to designate a file"
+    exit 1
+fi
+
+git clone -n  "$REPO" --depth 1 "$TmpDir"
+cd "$TmpDir"
+git checkout HEAD "$FILE"
+cp  "$FILE" "$HERE"
+cd "$HERE"
+rm -rf "/tmp/$TmpDirHome"  >/dev/null 2>&1
+
